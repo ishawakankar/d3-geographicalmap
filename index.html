@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+<meta charset="utf-8">
+<head>
+  <link rel="stylesheet" type="text/css" href="./style.css">
+  <title>Density of population</title>
+</head>
+<body style="background: #def3f6">
+  <header style="text-align: center"><h1 id='heading'>Density of population across India</h1></header>
+
+<div id="tooltip"></div>
+
+<div style="display: flex; flex-direction: row; flex-wrap: wrap;">
+  
+  <div style="padding-left: 3%">
+    <header style="padding-left: 12%"><h3>Total Population Density</h3></header>
+    <svg width="650" height="700" id="statesvg" style="width:45vw; border: 1 px solid black"></svg>
+  </div>
+  
+  <div id="tableqr" style="width:30vw; border: 1 px solid black;padding-left: 10%; font-size: 0.9rem">
+    <table style="font-family: arial, sans-serif;">
+      <tr>
+        <td width="250px"><strong>State</strong></td>
+        <td><strong>Density (per sq. km)</strong></td>
+      </tr>
+    </table>
+  </div>
+  
+</div>
+
+<!-- <div style="display: flex; flex-direction: row; flex-wrap: wrap;">
+  <div style="padding-left: 5%">
+    <header style="padding-left: 10%"><h3>Total QR Scans (Last 7 days)</h5></header>
+    <svg width="650" height="700" id="statesvgweek" style="width:45vw; border: 1 px solid black"></svg>
+  </div>
+
+  <div style="padding-left: 5%">
+  <div id="tableqrweek" style="width:30vw; border: 1 px solid black;">
+      <table style="font-family: arial, sans-serif">
+        <tr>
+          <td width="250px"><strong>State</strong></td>
+          <td><strong>Density (per sq. km)</strong></td>
+        </tr>
+      </table>
+    </div>
+</div> -->
+
+<script src="./jquery.js"></script>
+<script src="./scripts.js"></script>
+<script src="http://d3js.org/d3.v3.min.js"></script>
+<script>
+  function tooltipHtml(n, d){ 
+    return "<h4>"+n+"</h4><table id='tooltip-table'>"+
+      "<tr id='tooltiptr'><td id='tooltiptd'>Density: </td><td>"+(d.qr_scans)+"</td></tr>"+
+      "</table>";
+  }
+
+function addCommas(x) {
+    var parts = x.toString().split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    return parts.join(".");
+}
+
+  function loadTable(stateResult,id) {
+
+    //Sorting array on basis of count
+    stateResult.sort(function(a, b) {
+      return b.event.count - a.event.count;
+    });
+
+    stateResult.map((a) => {
+      var percentage = ((a.event.count)/(stateResult[0].event.count))*100;
+      var commaCount = addCommas(a.event.count);
+      percentage = percentage+"%";
+      var html1 = `<table style='font-family: arial, sans-serif; border-collapse: collapse; width: 100%;'>
+       <tr style='border: 1px solid #7a7878; text-align: left; margin: 8px;'>
+           <td style='border: 1px solid #7a7878; width: 250px'>${a.event.device_loc_state}</td>
+           <td style='border: 1px solid #7a7878;'><div style='background: #A9A9A9;position:relative;width:${percentage}'>${commaCount}</div></td>
+         </tr>
+    </table>`;
+    
+    (a.event.device_loc_state_code==null)?'':document.getElementById(`${id}`).innerHTML += html1;
+      })
+  }
+
+function loadMap(query1,id,tableid) {
+  // $.ajax(query1).done(function (response) {
+    var stateResult = query1;
+    loadTable(stateResult,tableid);
+    var finalData ={}; /* Sample random data. */
+    total_scans = stateResult.reduce((a, b)=> {return a + b.event.count}, 0);
+    // document.getElementById('total_scans').innerHTML = "<strong>"+total_scans+"</strong>";
+    
+    ["AN","AP","AR","AS","BR","CH","CT","DD","DL","DN","GA","GJ","HP","HR","JH","JK","KA","KL","LD","MH","ML","MN","MP","MZ","NL","OR","PB","PY","RJ","SK","TG","TN","TR","UP","UT","WB"]
+      .forEach(function(state_code){       
+        selected_state_data = stateResult.filter((a) => a.event['device_loc_state_code']==state_code)
+        qr_scan_count = selected_state_data.length == 0 ? 0 : selected_state_data[0].event.count
+        finalData[state_code]={qr_scans: qr_scan_count, color:d3.interpolate('rgb(255,250,204)', 'rgb(0, 255, 200)')(((qr_scan_count/stateResult[0].event.count)*100)/1)}; 
+      });
+      
+    /* draw states on id #statesvg */ 
+    iStates.draw(`${id}`, finalData, tooltipHtml);
+
+    d3.select(self.frameElement).style("height", "600px"); 
+    setTimeout(function() {
+      loadHeatmap()
+    }, 3600000)
+  
+}
+
+function loadHeatmap(){
+  var date= new Date();
+  today = date.toISOString().split('T')[0];
+
+  var populationJson = [];
+
+   $.getJSON('population.json', function(data) {
+       console.log('reading json',data)
+       populationJson = data;
+       loadMap(populationJson,'#statesvg','tableqr');
+       loadMap(populationJson,'#statesvgweek','tableqrweek')
+   });
+
+  var yesterday = new Date();
+  yesterday.setDate(date.getDate()-1);
+  yesterday = yesterday.toISOString().split('T')[0];
+
+  var lastweek = new Date();
+  lastweek.setDate(date.getDate()-7);
+  lastweek = lastweek.toISOString().split('T')[0];
+
+  var lastmonth = new Date();
+  lastmonth.setDate(date.getDate()-30);
+  lastmonth = lastmonth.toISOString().split('T')[0];
+
+  var tomorrow = new Date();
+  tomorrow.setDate(date.getDate()+1);
+  tomorrow = tomorrow.toISOString().split('T')[0];
+  
+  // var getScansLastDay = scans(lastmonth, today);
+  // var getScansToday = scans(lastweek, today);
+
+  // loadMap(populationJson,'#statesvg','tableqr');
+  // loadMap(populationJson,'#statesvgweek','tableqrweek')
+}
+
+loadHeatmap()
+
+</script>
+</body>
+</html>
